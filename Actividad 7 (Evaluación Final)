@@ -25,7 +25,7 @@ Qpp = [th1pp; th2pp; d3pp; th4pp; th5pp; th6pp];
 RP = [0 0 1 0 0 0];
 
 % Número de grados de libertad (GDL)
-GDL = size(RP,2);
+GDL = size(RP, 2);
 
 % ------------------- ARTICULACIONES -------------------
 
@@ -74,128 +74,215 @@ R(:,:,6) = [cos(th6) -sin(th6)  0;
             0  0   1;
             0 -1   0]; % Rotación de +90° en X
 
-% Vector de ceros
-Vector_Zeros = zeros(1, 3);
+
+%Creamos un vector de ceros
+Vector_Zeros= zeros(1, 3);
+
+%Inicializamos las matrices de transformación Homogénea locales
+A(:,:,GDL)=simplify([R(:,:,GDL) P(:,:,GDL); Vector_Zeros 1]);
+%Inicializamos las matrices de transformación Homogénea globales
+T(:,:,GDL)=simplify([R(:,:,GDL) P(:,:,GDL); Vector_Zeros 1]);
+%Inicializamos las posiciones vistas desde el marco de referencia inercial
+PO(:,:,GDL)= P(:,:,GDL); 
+%Inicializamos las matrices de rotación vistas desde el marco de referencia inercial
+RO(:,:,GDL)= R(:,:,GDL); 
+
+
+for i = 1:GDL
+    i_str= num2str(i);
+   %disp(strcat('Matriz de Transformación local A', i_str));
+    A(:,:,i)=simplify([R(:,:,i) P(:,:,i); Vector_Zeros 1]);
+   %pretty (A(:,:,i));
+
+   %Globales
+    try
+       T(:,:,i)= T(:,:,i-1)*A(:,:,i);
+    catch
+       T(:,:,i)= A(:,:,i);
+    end
+%     disp(strcat('Matriz de Transformación global T', i_str));
+    T(:,:,i)= simplify(T(:,:,i));
+%     pretty(T(:,:,i))
+
+    RO(:,:,i)= T(1:3,1:3,i);
+    PO(:,:,i)= T(1:3,4,i);
+    %pretty(RO(:,:,i));
+    %pretty(PO(:,:,i));
+end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%CALCULAMOS LAS VELOCIDADES PARA CADA ESLABÓN%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %%%%%%%%%%  VELOCIDADES PARA ESLABÓN 6  %%%%%%%%%%
 
-% Calculamos el jacobiano lineal de forma analítica
-Jv_a6(:,GDL) = PO(:,:,GDL);
-Jw_a6(:,GDL) = PO(:,:,GDL);
+%Calculamos el jacobiano lineal de forma analítica
+Jv_a6(:,GDL)=PO(:,:,GDL);
+Jw_a6(:,GDL)=PO(:,:,GDL);
 
-for k = 1:GDL
-    if RP(k) == 0 
-        % Para las juntas de revolución
+for k= 1:GDL
+    if RP(k)==0 
+       %Para las juntas de revolución
         try
-            Jv_a6(:,k) = cross(RO(:,3,k-1), PO(:,:,GDL) - PO(:,:,k-1));
-            Jw_a6(:,k) = RO(:,3,k-1);
+            Jv_a6(:,k)= cross(RO(:,3,k-1), PO(:,:,GDL)-PO(:,:,k-1));
+            Jw_a6(:,k)= RO(:,3,k-1);
         catch
-            Jv_a6(:,k) = cross([0,0,1], PO(:,:,GDL));
-            Jw_a6(:,k) = [0,0,1];
-        end
-    else
-        % Para las juntas prismáticas
+            Jv_a6(:,k)= cross([0,0,1], PO(:,:,GDL));%Matriz de rotación de 0 con respecto a 0 es la Matriz Identidad, la posición previa tambien será 0
+            Jw_a6(:,k)=[0,0,1];%Si no hay matriz de rotación previa se obtiene la Matriz identidad
+         end
+     else
+%         %Para las juntas prismáticas
         try
-            Jv_a6(:,k) = RO(:,3,k-1);
+            Jv_a6(:,k)= RO(:,3,k-1);
         catch
-            Jv_a6(:,k) = [0,0,1];
+            Jv_a6(:,k)=[0,0,1];
         end
-        Jw_a6(:,k) = [0,0,0];
-    end
-end    
+            Jw_a6(:,k)=[0,0,0];
+     end
+ end    
 
-Jv_a6 = simplify(Jv_a6);
-Jw_a6 = simplify(Jw_a6);
-Jac6 = [Jv_a6;
-        Jw_a6];
-Jacobiano6 = simplify(Jac6);
+%Obtenemos SubMatrices de Jacobianos
+Jv_a6= simplify (Jv_a6);
+Jw_a6= simplify (Jw_a6);
+%disp('Jacobiano lineal obtenido de forma analítica');
+%pretty (Jv_a);
+%disp('Jacobiano ángular obtenido de forma analítica');
+%pretty (Jw_a);
 
-V6 = simplify(Jv_a6 * Qp);
-W6 = simplify(Jw_a6 * Qp);
+%Matriz de Jacobiano Completa
+%disp('Matriz de Jacobiano');
+Jac6= [Jv_a6;
+      Jw_a6];
+Jacobiano6= simplify(Jac6);
+% pretty(Jacobiano);
+
+%Obtenemos vectores de Velocidades Lineales y Angulares para el eslabón 6
+ disp('Velocidad lineal obtenida mediante el Jacobiano lineal del Eslabón 6');
+V6=simplify (Jv_a6*Qp);
+pretty(V6)
+
+ disp('Velocidad angular obtenida mediante el Jacobiano angular del Eslabón 6');
+W6=simplify (Jw_a6*Qp);
+pretty(W6)
+
 
 %%%%%%%%%%  VELOCIDADES PARA ESLABÓN 5  %%%%%%%%%%
 
-Jv_a5(:,GDL-1) = PO(:,:,GDL-1);
-Jw_a5(:,GDL-1) = PO(:,:,GDL-1);
+%Calculamos el jacobiano lineal y angular de forma analítica
+Jv_a5(:,GDL-1)=PO(:,:,GDL-1);
+Jw_a5(:,GDL-1)=PO(:,:,GDL-1);
 
-for k = 1:GDL-1
-    if RP(k) == 0 
+for k= 1:GDL-1
+    if RP(k)==0 
+       %Para las juntas de revolución
         try
-            Jv_a5(:,k) = cross(RO(:,3,k-1), PO(:,:,GDL-1) - PO(:,:,k-1));
-            Jw_a5(:,k) = RO(:,3,k-1);
+            Jv_a5(:,k)= cross(RO(:,3,k-1), PO(:,:,GDL-1)-PO(:,:,k-1));
+            Jw_a5(:,k)= RO(:,3,k-1);
         catch
-            Jv_a5(:,k) = cross([0,0,1], PO(:,:,GDL-1));
-            Jw_a5(:,k) = [0,0,1];
-        end
-    else
+            Jv_a5(:,k)= cross([0,0,1], PO(:,:,GDL-1));%Matriz de rotación de 0 con respecto a 0 es la Matriz Identidad, la posición previa tambien será 0
+            Jw_a5(:,k)=[0,0,1];%Si no hay matriz de rotación previa se obtiene la Matriz identidad
+         end
+     else
+%         %Para las juntas prismáticas
         try
-            Jv_a5(:,k) = RO(:,3,k-1);
+            Jv_a5(:,k)= RO(:,3,k-1);
         catch
-            Jv_a5(:,k) = [0,0,1];
+            Jv_a5(:,k)=[0,0,1];
         end
-        Jw_a5(:,k) = [0,0,0];
-    end
-end    
+            Jw_a5(:,k)=[0,0,0];
+     end
+ end    
 
-Jv_a5 = simplify(Jv_a5);
-Jw_a5 = simplify(Jw_a5);
-Jac5 = [Jv_a5;
-        Jw_a5];
-Jacobiano5 = simplify(Jac5);
+%Obtenemos SubMatrices de Jacobianos
+Jv_a5= simplify (Jv_a5);
+Jw_a5= simplify (Jw_a5);
+%disp('Jacobiano lineal obtenido de forma analítica');
+%pretty (Jv_a);
+%disp('Jacobiano ángular obtenido de forma analítica');
+%pretty (Jw_a);
 
-V5 = simplify(Jv_a5 * Qp(1:5));  
-W5 = simplify(Jw_a5 * Qp(1:5));
+%Matriz de Jacobiano Completa
+%disp('Matriz de Jacobiano');
+Jac5= [Jv_a5;
+      Jw_a5];
+Jacobiano5= simplify(Jac5);
+% pretty(Jacobiano);
 
-%%%%%%%%%%  VELOCIDADES PARA ESLABÓN 4  %%%%%%%%%%
+%Obtenemos vectores de Velocidades Lineales y Angulares para el eslabón 5
+disp('Velocidad lineal obtenida mediante el Jacobiano lineal del Eslabón 5');
+Qp=Qp(t);
+V5=simplify (Jv_a5*Qp(1:5));  
+pretty(V5)
+ disp('Velocidad angular obtenida mediante el Jacobiano angular del Eslabón 5');
+W5=simplify (Jw_a5*Qp(1:5));
+pretty(W5)
 
-Jv_a4(:,GDL-2) = PO(:,:,GDL-2);
-Jw_a4(:,GDL-2) = PO(:,:,GDL-2);
 
-for k = 1:GDL-2
-    if RP(k) == 0 
+
+%%%%%%%%%%  VELOCIDADES PARA ESLABÓN 4  %%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%Calculamos el jacobiano lineal y angular de forma analítica
+Jv_a4(:,GDL-2)=PO(:,:,GDL-2);
+Jw_a4(:,GDL-2)=PO(:,:,GDL-2);
+
+for k= 1:GDL-2
+    if RP(k)==0 
+       %Para las juntas de revolución
         try
-            Jv_a4(:,k) = cross(RO(:,3,k-1), PO(:,:,GDL-2) - PO(:,:,k-1));
-            Jw_a4(:,k) = RO(:,3,k-1);
+            Jv_a4(:,k)= cross(RO(:,3,k-1), PO(:,:,GDL-2)-PO(:,:,k-1));
+            Jw_a4(:,k)= RO(:,3,k-1);
         catch
-            Jv_a4(:,k) = cross([0,0,1], PO(:,:,GDL-2));
-            Jw_a4(:,k) = [0,0,1];
-        end
-    else
+            Jv_a4(:,k)= cross([0,0,1], PO(:,:,GDL-2));%Matriz de rotación de 0 con respecto a 0 es la Matriz Identidad, la posición previa tambien será 0
+            Jw_a4(:,k)=[0,0,1];%Si no hay matriz de rotación previa se obtiene la Matriz identidad
+         end
+     else
+%         %Para las juntas prismáticas
         try
-            Jv_a4(:,k) = RO(:,3,k-1);
+            Jv_a4(:,k)= RO(:,3,k-1);
         catch
-            Jv_a4(:,k) = [0,0,1];
+            Jv_a4(:,k)=[0,0,1];
         end
-        Jw_a4(:,k) = [0,0,0];
-    end
-end    
+            Jw_a4(:,k)=[0,0,0];
+     end
+ end    
 
-Jv_a4 = simplify(Jv_a4);
-Jw_a4 = simplify(Jw_a4);
-Jac4 = [Jv_a4;
-        Jw_a4];
-Jacobiano4 = simplify(Jac4);
+%Obtenemos SubMatrices de Jacobianos
+Jv_a4= simplify (Jv_a4);
+Jw_a4= simplify (Jw_a4);
+%disp('Jacobiano lineal obtenido de forma analítica');
+%pretty (Jv_a);
+%disp('Jacobiano ángular obtenido de forma analítica');
+%pretty (Jw_a);
 
-V4 = simplify(Jv_a4 * Qp(1:4));  
-W4 = simplify(Jw_a4 * Qp(1:4));
+%Matriz de Jacobiano Completa
+%disp('Matriz de Jacobiano');
+Jac4= [Jv_a4;
+      Jw_a4];
+Jacobiano4= simplify(Jac4);
+% pretty(Jacobiano);
+
+%Obtenemos vectores de Velocidades Lineales y Angulares para el eslabón 4
+ disp('Velocidad lineal obtenida mediante el Jacobiano lineal del Eslabón 4');
+V4=simplify (Jv_a4*Qp(1:4));
+pretty(V4)
+ disp('Velocidad angular obtenida mediante el Jacobiano angular del Eslabón 4');
+W4=simplify (Jw_a4*Qp(1:4));
+pretty(W4)
+
 
 %%%%%%%%%%  VELOCIDADES PARA ESLABÓN 3  %%%%%%%%%%
 
-%Calculamos el jacobiano lineal y angular de forma analítica
+%Calculamos el jacobiano lineal de forma analítica
 Jv_a3(:,GDL-3)=PO(:,:,GDL-3);
 Jw_a3(:,GDL-3)=PO(:,:,GDL-3);
 
-for k= 1:GDL-3
+for k= 1:GDL
     if RP(k)==0 
        %Para las juntas de revolución
         try
             Jv_a3(:,k)= cross(RO(:,3,k-1), PO(:,:,GDL-3)-PO(:,:,k-1));
             Jw_a3(:,k)= RO(:,3,k-1);
         catch
-            Jv_a3(:,k)= cross([0,0,1], PO(:,:,GDL-3));
-            Jw_a3(:,k)=[0,0,1];
+            Jv_a3(:,k)= cross([0,0,1], PO(:,:,GDL-3));%Matriz de rotación de 0 con respecto a 0 es la Matriz Identidad, la posición previa tambien será 0
+            Jw_a3(:,k)=[0,0,1];%Si no hay matriz de rotación previa se obtiene la Matriz identidad
          end
      else
 %         %Para las juntas prismáticas
@@ -211,36 +298,43 @@ for k= 1:GDL-3
 %Obtenemos SubMatrices de Jacobianos
 Jv_a3= simplify (Jv_a3);
 Jw_a3= simplify (Jw_a3);
+%disp('Jacobiano lineal obtenido de forma analítica');
+%pretty (Jv_a);
+%disp('Jacobiano ángular obtenido de forma analítica');
+%pretty (Jw_a);
 
 %Matriz de Jacobiano Completa
+%disp('Matriz de Jacobiano');
 Jac3= [Jv_a3;
       Jw_a3];
 Jacobiano3= simplify(Jac3);
+% pretty(Jacobiano);
 
 %Obtenemos vectores de Velocidades Lineales y Angulares para el eslabón 3
  disp('Velocidad lineal obtenida mediante el Jacobiano lineal del Eslabón 3');
-V3=simplify (Jv_a3*Qp(1:3));  
+V3=simplify (Jv_a3*Qp(1:3));
 pretty(V3)
+
  disp('Velocidad angular obtenida mediante el Jacobiano angular del Eslabón 3');
 W3=simplify (Jw_a3*Qp(1:3));
 pretty(W3)
 
 
-%%%%%%%%%%  VELOCIDADES PARA ESLABÓN 2  %%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%  VELOCIDADES PARA ESLABÓN 2  %%%%%%%%%%
 
 %Calculamos el jacobiano lineal y angular de forma analítica
 Jv_a2(:,GDL-4)=PO(:,:,GDL-4);
 Jw_a2(:,GDL-4)=PO(:,:,GDL-4);
 
-for k= 1:GDL-4
+for k= 1:GDL-1
     if RP(k)==0 
        %Para las juntas de revolución
         try
             Jv_a2(:,k)= cross(RO(:,3,k-1), PO(:,:,GDL-4)-PO(:,:,k-1));
             Jw_a2(:,k)= RO(:,3,k-1);
         catch
-            Jv_a2(:,k)= cross([0,0,1], PO(:,:,GDL-4));
-            Jw_a2(:,k)=[0,0,1];
+            Jv_a2(:,k)= cross([0,0,1], PO(:,:,GDL-4));%Matriz de rotación de 0 con respecto a 0 es la Matriz Identidad, la posición previa tambien será 0
+            Jw_a2(:,k)=[0,0,1];%Si no hay matriz de rotación previa se obtiene la Matriz identidad
          end
      else
 %         %Para las juntas prismáticas
@@ -256,19 +350,27 @@ for k= 1:GDL-4
 %Obtenemos SubMatrices de Jacobianos
 Jv_a2= simplify (Jv_a2);
 Jw_a2= simplify (Jw_a2);
+%disp('Jacobiano lineal obtenido de forma analítica');
+%pretty (Jv_a);
+%disp('Jacobiano ángular obtenido de forma analítica');
+%pretty (Jw_a);
 
 %Matriz de Jacobiano Completa
+%disp('Matriz de Jacobiano');
 Jac2= [Jv_a2;
       Jw_a2];
 Jacobiano2= simplify(Jac2);
+% pretty(Jacobiano);
 
 %Obtenemos vectores de Velocidades Lineales y Angulares para el eslabón 2
 disp('Velocidad lineal obtenida mediante el Jacobiano lineal del Eslabón 2');
+Qp=Qp(t);
 V2=simplify (Jv_a2*Qp(1:2));  
 pretty(V2)
  disp('Velocidad angular obtenida mediante el Jacobiano angular del Eslabón 2');
 W2=simplify (Jw_a2*Qp(1:2));
 pretty(W2)
+
 
 
 %%%%%%%%%%  VELOCIDADES PARA ESLABÓN 1  %%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -277,15 +379,15 @@ pretty(W2)
 Jv_a1(:,GDL-5)=PO(:,:,GDL-5);
 Jw_a1(:,GDL-5)=PO(:,:,GDL-5);
 
-for k= 1:GDL-5
+for k= 1:GDL-2
     if RP(k)==0 
        %Para las juntas de revolución
         try
             Jv_a1(:,k)= cross(RO(:,3,k-1), PO(:,:,GDL-5)-PO(:,:,k-1));
             Jw_a1(:,k)= RO(:,3,k-1);
         catch
-            Jv_a1(:,k)= cross([0,0,1], PO(:,:,GDL-5));
-            Jw_a1(:,k)=[0,0,1];
+            Jv_a1(:,k)= cross([0,0,1], PO(:,:,GDL-5));%Matriz de rotación de 0 con respecto a 0 es la Matriz Identidad, la posición previa tambien será 0
+            Jw_a1(:,k)=[0,0,1];%Si no hay matriz de rotación previa se obtiene la Matriz identidad
          end
      else
 %         %Para las juntas prismáticas
@@ -301,11 +403,17 @@ for k= 1:GDL-5
 %Obtenemos SubMatrices de Jacobianos
 Jv_a1= simplify (Jv_a1);
 Jw_a1= simplify (Jw_a1);
+%disp('Jacobiano lineal obtenido de forma analítica');
+%pretty (Jv_a);
+%disp('Jacobiano ángular obtenido de forma analítica');
+%pretty (Jw_a);
 
 %Matriz de Jacobiano Completa
+%disp('Matriz de Jacobiano');
 Jac1= [Jv_a1;
       Jw_a1];
 Jacobiano1= simplify(Jac1);
+% pretty(Jacobiano);
 
 %Obtenemos vectores de Velocidades Lineales y Angulares para el eslabón 1
  disp('Velocidad lineal obtenida mediante el Jacobiano lineal del Eslabón 1');
@@ -314,28 +422,121 @@ pretty(V1)
  disp('Velocidad angular obtenida mediante el Jacobiano angular del Eslabón 1');
 W1=simplify (Jw_a1*Qp(1:1));
 pretty(W1)
-%%%%%%%%%%  ENERGÍA CINÉTICA TOTAL  %%%%%%%%%%
 
-P06 = subs(P(:,:,6), l6, lc6);
-P05 = subs(P(:,:,5), l5, lc5);
-P04 = subs(P(:,:,4), l4, lc4);
-P03 = subs(P(:,:,3), l3, lc3);
-P02 = subs(P(:,:,2), l2, lc2);
-P01 = subs(P(:,:,1), l1, lc1);
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%Energía Cinética
+%%%%%%%%%%%%%%%%%%%%%%%%%%Omitimos la división de cada lc%%%%%%%%%%%%%%%
+%Distancia del origen del eslabón a su centro de masa
+%Vectores de posición respecto al centro de masa
+ P01=subs(P(:,:,1), l1, lc1);%La función subs sustituye l1 por lc1 en 
+ P12=subs(P(:,:,2), l2, lc2); %la expresión P(:,:,1)/2
+ P23=subs(P(:,:,3), l3, lc3);
+ P34=subs(P(:,:,4), l4, lc4);
+ P45=subs(P(:,:,5), l5, lc5);
+ P56=subs(P(:,:,6), l6, lc6);
 
-I6 = [Ixx6 0 0; 0 Iyy6 0; 0 0 Izz6];
-I5 = [Ixx5 0 0; 0 Iyy5 0; 0 0 Izz5];
-I4 = [Ixx4 0 0; 0 Iyy4 0; 0 0 Izz4];
-I3 = [Ixx3 0 0; 0 Iyy3 0; 0 0 Izz3];
-I2 = [Ixx2 0 0; 0 Iyy2 0; 0 0 Izz2];
-I1 = [Ixx1 0 0; 0 Iyy1 0; 0 0 Izz1];
+%Creamos matrices de inercia para cada eslabón
 
-K6 = (1/2*m6*(V6 + cross(W6, P06))') * (V6 + cross(W6, P06)) + (1/2*W6') * (I6 * W6);
-K5 = (1/2*m5*(V5 + cross(W5, P05))') * (V5 + cross(W5, P05)) + (1/2*W5') * (I5 * W5);
-K4 = (1/2*m4*(V4 + cross(W4, P04))') * (V4 + cross(W4, P04)) + (1/2*W4') * (I4 * W4);
+I1=[Ixx1 0 0; 
+    0 Iyy1 0; 
+    0 0 Izz1];
 
-K_Total = simplify(K6 + K5 + K4); % (Suma hasta K1)
+I2=[Ixx2 0 0; 
+    0 Iyy2 0; 
+    0 0 Izz2];
+
+I3=[Ixx3 0 0; 
+    0 Iyy3 0; 
+    0 0 Izz3];
+
+I4=[Ixx4 0 0; 
+    0 Iyy4 0; 
+    0 0 Izz4];
+
+I5=[Ixx5 0 0; 
+    0 Iyy5 0; 
+    0 0 Izz5];
+
+I6=[Ixx6 0 0; 
+    0 Iyy6 0; 
+    0 0 Izz6];
+%Función de energía cinética
+
+% Calculamos la energía cinética para cada uno de los eslabones%%%%%%%%%%
+
+%Eslabón 1
+V1_Total = V1 + cross(W1, P01);
+K1 = (1/2 * m1 * (V1_Total))' * (V1_Total) + (1/2 * W1)' * (I1 * W1);
+disp('Energía Cinética en el Eslabón 1');
+K1 = simplify(K1);
+pretty(K1);
+
+%Eslabón 2
+V2_Total = V2 + cross(W2, P12);
+K2 = (1/2 * m2 * (V2_Total))' * (V2_Total) + (1/2 * W2)' * (I2 * W2);
+disp('Energía Cinética en el Eslabón 2');
+K2 = simplify(K2);
+pretty(K2);
+
+%Eslabón 3
+V3_Total = V3 + cross(W3, P23);
+K3 = (1/2 * m3 * (V3_Total))' * (V3_Total) + (1/2 * W3)' * (I3 * W3);  % Cambié I2 a I3 ya que es el eslabón 3
+disp('Energía Cinética en el Eslabón 3');
+K3 = simplify(K3);
+pretty(K3);
+
+%Eslabón 4
+V4_Total = V4 + cross(W4, P34);  % Añadí las variables correspondientes para el eslabón 4
+K4 = (1/2 * m4 * (V4_Total))' * (V4_Total) + (1/2 * W4)' * (I4 * W4);  % Añadí las matrices de inercia y velocidades para el eslabón 4
+disp('Energía Cinética en el Eslabón 4');
+K4 = simplify(K4);
+pretty(K4);
+
+%Eslabón 5
+V5_Total = V5 + cross(W5, P45);  % Añadí las variables correspondientes para el eslabón 5
+K5 = (1/2 * m5 * (V5_Total))' * (V5_Total) + (1/2 * W5)' * (I5 * W5);  % Añadí las matrices de inercia y velocidades para el eslabón 5
+disp('Energía Cinética en el Eslabón 5');
+K5 = simplify(K5);
+pretty(K5);
+
+%Eslabón 6
+V6_Total = V6 + cross(W6, P56);  % Añadí las variables correspondientes para el eslabón 6
+K6 = (1/2 * m6 * (V6_Total))' * (V6_Total) + (1/2 * W6)' * (I6 * W6);  % Añadí las matrices de inercia y velocidades para el eslabón 6
+disp('Energía Cinética en el Eslabón 6');
+K6 = simplify(K6);
+pretty(K6);
+
+% Calculamos la energía cinética total considerando los 6 eslabones
+K_Total = simplify(K1 + K2 + K3 + K4 + K5 + K6);
 disp('Energía Cinética Total');
 pretty(K_Total);
 
+%Energía Potencial  p = mgh
+
+% Obtenemos las alturas respecto a la gravedad
+h1 = P01(2); % Tomo la altura paralela al eje z
+h2 = P12(2); % Tomo la altura paralela al eje y
+h3 = P23(2); % Tomo la altura paralela al eje y
+h4 = P34(2); % Tomo la altura paralela al eje y (eslabón 4)
+h5 = P45(2); % Tomo la altura paralela al eje y (eslabón 5)
+h6 = P56(2); % Tomo la altura paralela al eje y (eslabón 6)
+
+% Energías potenciales para cada eslabón
+U1 = m1 * g * h1;
+U2 = m2 * g * h2;
+U3 = m3 * g * h3;
+U4 = m4 * g * h4;  % Energía potencial para el eslabón 4
+U5 = m5 * g * h5;  % Energía potencial para el eslabón 5
+U6 = m6 * g * h6;  % Energía potencial para el eslabón 6
+
+% Calculamos la energía potencial total
+U_Total = U1 + U2 + U3 + U4 + U5 + U6;
+
+% Obtenemos el Lagrangiano
+Lagrangiano = simplify(K_Total - U_Total);
+% pretty(Lagrangiano);
+
+% Modelo de Energía
+H = simplify(K_Total + U_Total);
+% pretty(H);
 
